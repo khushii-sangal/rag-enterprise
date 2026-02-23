@@ -1,13 +1,13 @@
-from langchain_ollama import OllamaLLM
+from langchain_ollama import OllamaLLM, OllamaEmbeddings
 from langchain_community.vectorstores import Chroma
-from langchain_ollama import OllamaEmbeddings
-from langchain.chains import RetrievalQA
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain.chains import create_retrieval_chain
 
-# Load embeddings
+# Load embedding model
 embedding = OllamaEmbeddings(model="nomic-embed-text")
 
-# Load vector database
+# Load vector DB
 vectordb = Chroma(
     persist_directory="chroma_db",
     embedding_function=embedding
@@ -15,7 +15,7 @@ vectordb = Chroma(
 
 retriever = vectordb.as_retriever()
 
-# Strong system prompt (NO hallucination)
+# Strict system prompt
 template = """
 You are an enterprise assistant.
 
@@ -27,31 +27,27 @@ Context:
 {context}
 
 Question:
-{question}
+{input}
 
 Answer:
 """
 
-PROMPT = PromptTemplate(
-    template=template,
-    input_variables=["context", "question"]
-)
+prompt = PromptTemplate.from_template(template)
 
 # Load LLM
 llm = OllamaLLM(model="llama3")
 
-qa_chain = RetrievalQA.from_chain_type(
-    llm=llm,
-    retriever=retriever,
-    chain_type="stuff",
-    chain_type_kwargs={"prompt": PROMPT}
-)
+# Create document chain
+document_chain = create_stuff_documents_chain(llm, prompt)
+
+# Create retrieval chain
+retrieval_chain = create_retrieval_chain(retriever, document_chain)
 
 while True:
     query = input("Ask a question: ")
     if query.lower() == "exit":
         break
 
-    response = qa_chain.run(query)
+    response = retrieval_chain.invoke({"input": query})
     print("\nAnswer:")
-    print(response)
+    print(response["answer"])

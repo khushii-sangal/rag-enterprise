@@ -1,8 +1,8 @@
 from langchain_ollama import OllamaLLM, OllamaEmbeddings
 from langchain_community.vectorstores import Chroma
-from langchain_core.prompts import PromptTemplate
-from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain.chains import create_retrieval_chain
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnablePassthrough
 
 # Load embedding model
 embedding = OllamaEmbeddings(model="nomic-embed-text")
@@ -16,10 +16,10 @@ vectordb = Chroma(
 retriever = vectordb.as_retriever()
 
 # Strict system prompt
-template = """
+prompt = ChatPromptTemplate.from_template("""
 You are an enterprise assistant.
 
-You must answer ONLY using the provided context.
+Answer ONLY using the provided context.
 If the answer is not in the context, say:
 "I cannot answer this question based on the provided documents."
 
@@ -27,27 +27,34 @@ Context:
 {context}
 
 Question:
-{input}
+{question}
 
 Answer:
-"""
-
-prompt = PromptTemplate.from_template(template)
+""")
 
 # Load LLM
 llm = OllamaLLM(model="llama3")
 
-# Create document chain
-document_chain = create_stuff_documents_chain(llm, prompt)
+# Format retrieved docs into single string
+def format_docs(docs):
+    return "\n\n".join(doc.page_content for doc in docs)
 
-# Create retrieval chain
-retrieval_chain = create_retrieval_chain(retriever, document_chain)
+# Build LCEL retrieval chain
+rag_chain = (
+    {
+        "context": retriever | format_docs,
+        "question": RunnablePassthrough()
+    }
+    | prompt
+    | llm
+    | StrOutputParser()
+)
 
 while True:
     query = input("Ask a question: ")
     if query.lower() == "exit":
         break
 
-    response = retrieval_chain.invoke({"input": query})
+    response = rag_chain.invoke(query)
     print("\nAnswer:")
-    print(response["answer"])
+    print(response)

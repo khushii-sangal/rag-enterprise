@@ -1,27 +1,27 @@
+from langchain_ollama import OllamaLLM
 from langchain_community.vectorstores import Chroma
-from langchain_community.embeddings import OllamaEmbeddings
-from langchain_community.llms import Ollama
-from langchain_core.prompts import PromptTemplate
-from langchain_core.runnables import RunnablePassthrough
-from langchain_core.output_parsers import StrOutputParser
+from langchain_ollama import OllamaEmbeddings
+from langchain.chains import RetrievalQA
+from langchain.prompts import PromptTemplate
 
-# Load embedding model
+# Load embeddings
 embedding = OllamaEmbeddings(model="nomic-embed-text")
 
-# Load existing Chroma DB
+# Load vector database
 vectordb = Chroma(
-    persist_directory="./chroma_db",
+    persist_directory="chroma_db",
     embedding_function=embedding
 )
 
 retriever = vectordb.as_retriever()
 
-# Load LLM
-llm = Ollama(model="llama3")
-
-# Define prompt template
+# Strong system prompt (NO hallucination)
 template = """
-Use the following context to answer the question.
+You are an enterprise assistant.
+
+You must answer ONLY using the provided context.
+If the answer is not in the context, say:
+"I cannot answer this question based on the provided documents."
 
 Context:
 {context}
@@ -32,19 +32,26 @@ Question:
 Answer:
 """
 
-prompt = PromptTemplate.from_template(template)
-
-# RAG chain
-rag_chain = (
-    {"context": retriever, "question": RunnablePassthrough()}
-    | prompt
-    | llm
-    | StrOutputParser()
+PROMPT = PromptTemplate(
+    template=template,
+    input_variables=["context", "question"]
 )
 
-# Ask question
-query = input("Ask a question: ")
-response = rag_chain.invoke(query)
+# Load LLM
+llm = OllamaLLM(model="llama3")
 
-print("\nAnswer:")
-print(response)
+qa_chain = RetrievalQA.from_chain_type(
+    llm=llm,
+    retriever=retriever,
+    chain_type="stuff",
+    chain_type_kwargs={"prompt": PROMPT}
+)
+
+while True:
+    query = input("Ask a question: ")
+    if query.lower() == "exit":
+        break
+
+    response = qa_chain.run(query)
+    print("\nAnswer:")
+    print(response)

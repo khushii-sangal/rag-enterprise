@@ -15,13 +15,18 @@ vectordb = Chroma(
 
 retriever = vectordb.as_retriever()
 
-# Strict system prompt
+# Conversation history storage
+chat_history = []
+
 prompt = ChatPromptTemplate.from_template("""
 You are an enterprise assistant.
 
 Answer ONLY using the provided context.
 If the answer is not in the context, say:
 "I cannot answer this question based on the provided documents."
+
+Conversation History:
+{history}
 
 Context:
 {context}
@@ -32,18 +37,16 @@ Question:
 Answer:
 """)
 
-# Load LLM
 llm = OllamaLLM(model="llama3")
 
-# Format retrieved docs into single string
 def format_docs(docs):
     return "\n\n".join(doc.page_content for doc in docs)
 
-# Build LCEL retrieval chain
 rag_chain = (
     {
         "context": retriever | format_docs,
-        "question": RunnablePassthrough()
+        "question": RunnablePassthrough(),
+        "history": lambda x: "\n".join(chat_history)
     }
     | prompt
     | llm
@@ -56,5 +59,10 @@ while True:
         break
 
     response = rag_chain.invoke(query)
+
     print("\nAnswer:")
     print(response)
+
+    # Save history
+    chat_history.append(f"User: {query}")
+    chat_history.append(f"Assistant: {response}")

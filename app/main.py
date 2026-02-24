@@ -1,5 +1,7 @@
 from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+import asyncio
 
 from langchain_ollama import OllamaLLM, OllamaEmbeddings
 from langchain_community.vectorstores import Chroma
@@ -9,7 +11,7 @@ from langchain_core.runnables import RunnablePassthrough
 
 app = FastAPI()
 
-# ---- Load Models Once (Important for Performance) ----
+# ---- Load Models Once ----
 
 embedding = OllamaEmbeddings(model="nomic-embed-text")
 
@@ -51,14 +53,20 @@ rag_chain = (
     | StrOutputParser()
 )
 
-# ---- Request Schema ----
-
 class ChatRequest(BaseModel):
     question: str
 
-# ---- API Endpoint ----
 
 @app.post("/chat")
-def chat(request: ChatRequest):
-    answer = rag_chain.invoke(request.question)
-    return {"answer": answer}
+async def chat(request: ChatRequest):
+
+    async def generate():
+        # Invoke normally
+        answer = rag_chain.invoke(request.question)
+
+        # Simulate token streaming
+        for word in answer.split():
+            yield word + " "
+            await asyncio.sleep(0.02)  # small delay for streaming effect
+
+    return StreamingResponse(generate(), media_type="text/plain")

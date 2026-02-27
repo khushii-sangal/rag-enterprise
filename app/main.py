@@ -56,17 +56,52 @@ rag_chain = (
 class ChatRequest(BaseModel):
     question: str
 
-
 @app.post("/chat")
 async def chat(request: ChatRequest):
 
     async def generate():
-        # Invoke normally
-        answer = rag_chain.invoke(request.question)
 
-        # Simulate token streaming
-        for word in answer.split():
+        # Step 1: Retrieve relevant documents
+        docs = retriever.invoke(request.question)
+
+        # Step 2: Format context
+        context = format_docs(docs)
+
+        # Step 3: Generate answer
+        response = llm.invoke(
+            prompt.format(
+                context=context,
+                question=request.question
+            )
+        )
+
+        # Step 4: Stream answer
+        for word in response.split():
             yield word + " "
-            await asyncio.sleep(0.02)  # small delay for streaming effect
+            await asyncio.sleep(0.02)
 
     return StreamingResponse(generate(), media_type="text/plain")
+@app.post("/chat_with_sources")
+def chat_with_sources(request: ChatRequest):
+
+    docs = retriever.invoke(request.question)
+    context = format_docs(docs)
+
+    answer = llm.invoke(
+        prompt.format(
+            context=context,
+            question=request.question
+        )
+    )
+
+    sources = []
+    for doc in docs:
+        sources.append({
+            "source": doc.metadata.get("source", "unknown"),
+            "page": doc.metadata.get("page", "unknown")
+        })
+
+    return {
+        "answer": answer,
+        "sources": sources
+    }

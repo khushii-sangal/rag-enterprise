@@ -93,15 +93,21 @@ def chat_with_sources(request: ChatRequest):
             question=request.question
         )
     )
-
+    import os 
+    unique_sources = set()
     sources = []
-    for doc in docs:
-        sources.append({
-            "source": doc.metadata.get("source", "unknown"),
-            "page": doc.metadata.get("page", "unknown")
-        })
 
-    return {
-        "answer": answer,
-        "sources": sources
-    }
+    for doc in docs:
+        raw_source = doc.metadata.get("source", "unknown")
+        page = doc.metadata.get("page", "unknown")
+
+        # Clean filename
+        filename = os.path.basename(raw_source)
+
+        key = (filename, page)
+        if key not in unique_sources:
+            unique_sources.add(key)
+            sources.append({
+            "source": filename,
+            "page": page
+        })

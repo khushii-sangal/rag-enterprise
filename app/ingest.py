@@ -1,31 +1,39 @@
+# app/ingest.py
+
+import os
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import OllamaEmbeddings
-from langchain_community.vectorstores import Chroma
+from app.services.vector_store import get_vectorstore
 
-print("Loading PDF...")
-loader = PyPDFLoader("./data/sample.pdf")
-documents = loader.load()
+PDF_PATH = "data/sample.pdf"   # ← change this to your actual PDF
+CHROMA_PATH = "chroma_db"
 
-print("Splitting into chunks...")
-text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=800,
-    chunk_overlap=150
-)
-chunks = text_splitter.split_documents(documents)
+def ingest():
 
-print(f"Total chunks created: {len(chunks)}")
+    # 1️⃣ Load PDF
+    loader = PyPDFLoader(PDF_PATH)
+    documents = loader.load()
 
-print("Creating embeddings...")
-embedding = OllamaEmbeddings(model="nomic-embed-text")
+    print(f"Loaded {len(documents)} pages")
 
-print("Storing into Chroma...")
-vectordb = Chroma.from_documents(
-    documents=chunks,
-    embedding=embedding,
-    persist_directory="./chroma_db"
-)
+    # 2️⃣ Split documents (IMPORTANT: preserves metadata)
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=500,
+        chunk_overlap=50
+    )
 
-vectordb.persist()
+    chunks = text_splitter.split_documents(documents)
 
-print("Documents successfully embedded and stored!")
+    print(f"Created {len(chunks)} chunks")
+
+    # 3️⃣ Store in Chroma
+    vectordb = get_vectorstore()
+
+    vectordb.add_documents(chunks)
+   
+
+    print("Ingestion complete ✅")
+
+
+if __name__ == "__main__":
+    ingest()

@@ -11,3 +11,6 @@ vectordb = Chroma(
 retriever = vectordb.as_retriever()
 def get_retriever():
     return retriever
+
+def get_vectorstore():
+    return vectordb

@@ -82,18 +82,24 @@ async def chat(request: ChatRequest):
 
     return StreamingResponse(generate(), media_type="text/plain")
 @app.post("/chat_with_sources")
-def chat_with_sources(request: ChatRequest):
+async def chat_with_sources(request: ChatRequest):
 
+    # Step 1: Retrieve documents
     docs = retriever.invoke(request.question)
+
+    # Step 2: Format context
     context = format_docs(docs)
 
+    # Step 3: Generate answer
     answer = llm.invoke(
         prompt.format(
             context=context,
             question=request.question
         )
     )
-    import os 
+
+    # Step 4: Extract unique sources
+    import os
     unique_sources = set()
     sources = []
 
@@ -101,13 +107,17 @@ def chat_with_sources(request: ChatRequest):
         raw_source = doc.metadata.get("source", "unknown")
         page = doc.metadata.get("page", "unknown")
 
-        # Clean filename
         filename = os.path.basename(raw_source)
-
         key = (filename, page)
+
         if key not in unique_sources:
             unique_sources.add(key)
             sources.append({
-            "source": filename,
-            "page": page
-        })
+                "source": filename,
+                "page": page
+            })
+
+    return {
+        "answer": answer,
+        "sources": sources
+    }

@@ -2,6 +2,7 @@
 
 import time
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from app.models.schemas import QueryRequest, QueryResponse, Source
 from app.services.vector_store import get_vectorstore
 from app.services.rag_chain import get_rag_chain
@@ -11,7 +12,13 @@ app = FastAPI()
 
 vectordb = get_vectorstore()
 rag_chain = get_rag_chain()
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],  # frontend URL
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.post("/query", response_model=QueryResponse)
 async def query(request: QueryRequest):
